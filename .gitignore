@@ -21,3 +21,6 @@ out/
 
 # 废弃的部署脚本
 deploy/
+
+# Claude Code 会话数据（含本地路径等私有信息）
+.claude/

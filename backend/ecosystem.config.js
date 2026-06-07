@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'ai-backend',
       script: 'dist/server.js',
-      cwd: '/Users/kazuyoshi/Documents/VSCodePlugIn/backend',
+      cwd: '/Users/kazuyoshi/Documents/AIPlugIn4vscode/backend',
       env: {
         PORT: 3000,
         CLAUDE_PATH: '/Users/kazuyoshi/.local/bin/claude',
