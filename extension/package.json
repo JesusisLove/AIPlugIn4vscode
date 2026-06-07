@@ -1,0 +1,48 @@
+{
+  "name": "ai-code-assistant",
+  "displayName": "LiuYM",
+  "description": "AI LLM 智能代码助手 - 支持多模型切换 | 設計者：上原和義",
+  "version": "0.0.1",
+  "publisher": "kazuyoshi",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiChat.open",
+        "title": "打开 AI 助手",
+        "category": "AI Chat"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "aiChat.open",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      }
+    ],
+    "configuration": {
+      "title": "AI Assistant",
+      "properties": {
+        "aiAssistant.backendUrl": {
+          "type": "string",
+          "default": "http://10.8.0.6:3000",
+          "description": "后端服务器地址（Mac Studio VPN: http://10.8.0.6:3000，本地开发: http://localhost:3000）"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

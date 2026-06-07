@@ -1,0 +1,23 @@
+# 环境变量（含敏感信息，不提交）
+.env
+
+# Node.js
+node_modules/
+dist/
+out/
+
+# 编译产物
+*.vsix
+*.js.map
+
+# macOS
+.DS_Store
+
+# pm2
+.pm2/
+
+# VSCode
+.vscode/
+
+# 废弃的部署脚本
+deploy/
