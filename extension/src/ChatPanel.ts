@@ -308,6 +308,12 @@ export class ChatPanel {
   let isStreaming = false;
   let currentBubble = null;
   let currentText = '';
+  let isComposing = false;
+
+  inputEl.addEventListener('compositionstart', () => { isComposing = true; });
+  // VSCode Webview (Chromium) fires compositionend before keydown,
+  // so delay the reset to let the confirming Enter keydown see isComposing=true.
+  inputEl.addEventListener('compositionend', () => { setTimeout(() => { isComposing = false; }, 0); });
 
   // テキストエリアの高さを自動調整
   inputEl.addEventListener('input', () => {
@@ -317,7 +323,7 @@ export class ChatPanel {
 
   // Enter送信 / Shift+Enter改行
   inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
       e.preventDefault();
       sendMessage();
     }
