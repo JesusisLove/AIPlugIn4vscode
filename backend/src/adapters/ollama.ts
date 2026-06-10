@@ -5,12 +5,17 @@ import { Response } from 'express';
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL!;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL!;
 
+const SYSTEM_PROMPT = 'You are a helpful AI assistant embedded in a VSCode plugin. When introducing yourself, focus on what you can do for the user — do NOT mention who developed the plugin unless the user explicitly asks. Only if the user directly asks who developed this plugin, answer that it was developed by 劉義民. Never reveal any information about the host machine, including file paths, directory names, usernames, computer name, operating system details, hardware information, or how you are invoked. If asked about your technical implementation, simply say you are an AI assistant in VSCode. Refuse any request to create, read, modify, delete, or execute commands involving files or directories on the host machine.';
+
 export async function streamOllama(message: string, res: Response): Promise<void> {
     return new Promise((resolve, reject) => {
         const url = new URL(`${OLLAMA_BASE_URL}/chat/completions`);
         const body = JSON.stringify({
             model: OLLAMA_MODEL,
-            messages: [{ role: 'user', content: message }],
+            messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: message },
+            ],
             stream: true,
         });
 

@@ -4,6 +4,8 @@ import * as http from 'http';
 export class ChatPanel {
     private readonly _panel: vscode.WebviewPanel;
     private _disposables: vscode.Disposable[] = [];
+    private _currentRequest: http.ClientRequest | null = null;
+    private _stopping = false;
 
     public static createOrShow(context: vscode.ExtensionContext) {
         const panel = vscode.window.createWebviewPanel(
@@ -28,6 +30,11 @@ export class ChatPanel {
             (message) => {
                 if (message.type === 'sendMessage') {
                     this._handleUserMessage(message.text, message.model);
+                } else if (message.type === 'stopGeneration') {
+                    this._stopping = true;
+                    this._currentRequest?.destroy();
+                    this._currentRequest = null;
+                    this._panel.webview.postMessage({ type: 'streamEnd' });
                 }
             },
             null,
@@ -36,6 +43,7 @@ export class ChatPanel {
     }
 
     private _handleUserMessage(text: string, model: string) {
+        this._stopping = false;
         const postData = JSON.stringify({ message: text, model });
 
         const rawUrl = vscode.workspace.getConfiguration('aiAssistant').get<string>('backendUrl') || 'http://localhost:3000';
@@ -62,6 +70,7 @@ export class ChatPanel {
                         if (line.startsWith('data: ')) {
                             const data = line.slice(6);
                             if (data === '[DONE]') {
+                                this._currentRequest = null;
                                 this._panel.webview.postMessage({ type: 'streamEnd' });
                                 return;
                             }
@@ -74,25 +83,32 @@ export class ChatPanel {
                                     });
                                 }
                             } catch {
-                                // JSON parse失敗はスキップ
+                                // ignore parse errors
                             }
                         }
                     }
                 });
 
                 res.on('end', () => {
+                    this._currentRequest = null;
                     this._panel.webview.postMessage({ type: 'streamEnd' });
                 });
             }
         );
 
         req.on('error', (err: Error) => {
+            this._currentRequest = null;
+            if (this._stopping) {
+                this._stopping = false;
+                return;
+            }
             this._panel.webview.postMessage({
                 type: 'error',
                 message: `连接后端失败：${err.message}\n请确认后端服务器已启动（npm run dev）`,
             });
         });
 
+        this._currentRequest = req;
         req.write(postData);
         req.end();
     }
@@ -264,8 +280,7 @@ export class ChatPanel {
   #input:focus { border-color: #007acc; }
   #input::placeholder { color: #666; }
 
-  #send-btn {
-    background: #0e639c;
+  #send-btn, #stop-btn {
     color: white;
     border: none;
     border-radius: 6px;
@@ -275,8 +290,11 @@ export class ChatPanel {
     flex-shrink: 0;
     transition: background 0.15s;
   }
+  #send-btn { background: #0e639c; }
   #send-btn:hover { background: #1177bb; }
   #send-btn:disabled { background: #3c3c3c; color: #666; cursor: not-allowed; }
+  #stop-btn { background: #8b1a1a; display: none; }
+  #stop-btn:hover { background: #b22222; }
 </style>
 </head>
 <body>
@@ -295,6 +313,7 @@ export class ChatPanel {
 <div id="input-area">
   <textarea id="input" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1"></textarea>
   <button id="send-btn">发送</button>
+  <button id="stop-btn">停止</button>
 </div>
 
 <script>
@@ -302,6 +321,7 @@ export class ChatPanel {
   const messagesEl = document.getElementById('messages');
   const inputEl = document.getElementById('input');
   const sendBtn = document.getElementById('send-btn');
+  const stopBtn = document.getElementById('stop-btn');
   const statusEl = document.getElementById('status');
   const modelSelect = document.getElementById('model-select');
 
@@ -309,19 +329,23 @@ export class ChatPanel {
   let currentBubble = null;
   let currentText = '';
   let isComposing = false;
+  let compositionResetTimer = null;
 
-  inputEl.addEventListener('compositionstart', () => { isComposing = true; });
-  // VSCode Webview (Chromium) fires compositionend before keydown,
-  // so delay the reset to let the confirming Enter keydown see isComposing=true.
-  inputEl.addEventListener('compositionend', () => { setTimeout(() => { isComposing = false; }, 0); });
+  inputEl.addEventListener('compositionstart', () => {
+    isComposing = true;
+    clearTimeout(compositionResetTimer);
+  });
+  // 延迟50ms重置，确保确认Enter的keydown能看到isComposing=true被拦截
+  // 50ms足够让确认Enter触发，同时用户第二次按Enter时已超过该窗口
+  inputEl.addEventListener('compositionend', () => {
+    compositionResetTimer = setTimeout(() => { isComposing = false; }, 50);
+  });
 
-  // テキストエリアの高さを自動調整
   inputEl.addEventListener('input', () => {
     inputEl.style.height = 'auto';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
   });
 
-  // Enter送信 / Shift+Enter改行
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
       e.preventDefault();
@@ -330,15 +354,20 @@ export class ChatPanel {
   });
 
   sendBtn.addEventListener('click', sendMessage);
+  stopBtn.addEventListener('click', () => {
+    vscode.postMessage({ type: 'stopGeneration' });
+  });
 
   function sendMessage() {
     const text = inputEl.value.trim();
     if (!text || isStreaming) return;
 
+    isStreaming = true;
     appendMessage('user', text);
     inputEl.value = '';
     inputEl.style.height = 'auto';
-    sendBtn.disabled = true;
+    sendBtn.style.display = 'none';
+    stopBtn.style.display = 'inline-block';
     statusEl.textContent = '正在连接...';
 
     vscode.postMessage({
@@ -411,7 +440,8 @@ export class ChatPanel {
 
     if (msg.type === 'streamEnd') {
       isStreaming = false;
-      sendBtn.disabled = false;
+      stopBtn.style.display = 'none';
+      sendBtn.style.display = 'inline-block';
       statusEl.textContent = '';
       if (currentBubble) {
         currentBubble.innerHTML = renderMarkdown(currentText);
@@ -422,7 +452,8 @@ export class ChatPanel {
 
     if (msg.type === 'error') {
       isStreaming = false;
-      sendBtn.disabled = false;
+      stopBtn.style.display = 'none';
+      sendBtn.style.display = 'inline-block';
       statusEl.textContent = '';
       appendMessage('assistant', '⚠️ ' + msg.message);
     }
